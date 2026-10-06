@@ -11,11 +11,18 @@ The Clash of Clans API token is read from (in order): Streamlit secrets
 
 from __future__ import annotations
 
+import io
 import os
+import re
 
 import altair as alt
+import matplotlib
 import pandas as pd
 import streamlit as st
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib import patches  # noqa: E402
 
 from coc_cwl_bonus import (
     OFFICIAL_BASE,
@@ -178,6 +185,67 @@ with st.sidebar:
     run = st.button("⚔️ Calculate", type="primary", use_container_width=True)
 
 
+_EMOJI_RE = re.compile(
+    "[\U0001F000-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF"
+    "\U00002B00-\U00002BFF\uFE0F\u2122]",
+    flags=re.UNICODE,
+)
+
+
+def clean_name(s: str) -> str:
+    """Strip emoji/symbols matplotlib can't render (keeps Latin/Greek/Cyrillic)."""
+    out = _EMOJI_RE.sub("", s).strip()
+    return out or s
+
+
+def make_results_png(ranked, bonus_slots, clan_tag, mode) -> bytes:
+    n = len(ranked)
+    fig_h = 1.6 + 0.42 * n
+    fig = plt.figure(figsize=(8.4, fig_h), dpi=200)
+    fig.patch.set_facecolor("#111a15")
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.axis("off")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+
+    ax.text(0.5, 0.965, "CWL MEDAL-BONUS", color="#ffcf5c", fontsize=22,
+            fontweight="bold", ha="center", va="center")
+    w = ranked[0]
+    ax.text(0.5, 0.925,
+            f"Gold Pass Winner:  {clean_name(w.name)}    |    {clan_tag}    |    {mode} mode",
+            color="#e9d9a6", fontsize=11, ha="center", va="center")
+
+    top, bottom = 0.88, 0.03
+    row_h = (top - bottom) / (n + 1)
+    xr = {"rank": 0.055, "bonus": 0.105, "name": 0.145, "th": 0.66, "score": 0.80, "stars": 0.93}
+
+    yh = top - row_h / 2
+    ax.text(xr["rank"], yh, "#", color="#9fb3a6", fontsize=10, ha="center", va="center", fontweight="bold")
+    ax.text(xr["name"], yh, "PLAYER", color="#9fb3a6", fontsize=10, ha="left", va="center", fontweight="bold")
+    ax.text(xr["th"], yh, "TH", color="#9fb3a6", fontsize=10, ha="center", va="center", fontweight="bold")
+    ax.text(xr["score"], yh, "SCORE", color="#9fb3a6", fontsize=10, ha="right", va="center", fontweight="bold")
+    ax.text(xr["stars"], yh, "STARS", color="#9fb3a6", fontsize=10, ha="right", va="center", fontweight="bold")
+
+    for i, p in enumerate(ranked, 1):
+        y = top - row_h * i - row_h / 2
+        if i == 1:
+            ax.add_patch(patches.Rectangle((0.02, y - row_h / 2), 0.96, row_h, color="#3a2f0b", zorder=0))
+        ax.text(xr["rank"], y, str(i), color="#dfe9e0", fontsize=10, ha="center", va="center")
+        if i <= bonus_slots:
+            ax.text(xr["bonus"], y, "★", color="#f4b63e", fontsize=11, ha="center", va="center")
+        ax.text(xr["name"], y, clean_name(p.name)[:24], fontsize=10.5, ha="left", va="center",
+                color="#ffe08a" if i == 1 else "#eef5ee")
+        ax.text(xr["th"], y, str(p.th), color="#cfe3c9", fontsize=10, ha="center", va="center")
+        ax.text(xr["score"], y, f"{p.score:.2f}", color="#ffd977", fontsize=10.5, ha="right",
+                va="center", fontweight="bold")
+        ax.text(xr["stars"], y, str(p.total_stars), color="#cfe3c9", fontsize=10, ha="right", va="center")
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", facecolor=fig.get_facecolor(), bbox_inches="tight", pad_inches=0.2)
+    plt.close(fig)
+    return buf.getvalue()
+
+
 def ranking_table(ranked, bonus_slots):
     rows = []
     for i, p in enumerate(ranked, 1):
@@ -320,6 +388,10 @@ def render(clan_tag: str) -> None:
 
     with tab_rank:
         ranking_table(ranked, bonus_slots)
+        png = make_results_png(ranked, bonus_slots, clan_tag, th_mode)
+        st.download_button("⬇️ Download ranking as PNG", data=png,
+                           file_name=f"cwl-ranking-{th_mode}.png", mime="image/png",
+                           use_container_width=True)
         st.subheader(f"⭐ Bonus-medal recipients (top {bonus_slots})")
         st.write("  •  ".join(f"{i}. {p.name}" for i, p in enumerate(ranked[:bonus_slots], 1)))
 
