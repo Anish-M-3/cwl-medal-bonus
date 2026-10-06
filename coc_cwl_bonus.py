@@ -41,7 +41,7 @@ SCORING = {
     "attack": 1.0,            # multiplier on attack stars (0-3)
     "defense": 0.0,           # defense is not part of this calculator (set >0 to re-enable)
     "th_up_bonus": 0.5,       # (raw/fair modes) added per TH level attacked ABOVE expectation
-    "th_down_penalty": 0.5,   # (raw/fair modes) subtracted per TH level attacked BELOW expectation
+    "th_down_penalty": 0.0,   # (raw/fair modes) subtracted per TH level attacked BELOW expectation
     "th_absolute": 0.2,       # (absolute mode) added per TH level of the base hit, above the field's weakest base
     "destruction": 0.003,     # tiebreaker: 100% destruction -> +0.3
     "missed_attack_penalty": 2.0,  # subtracted per war a rostered member didn't attack
@@ -207,33 +207,42 @@ def collect_stats(client: CocClient, clan_tag: str, include_live: bool = False) 
     return players
 
 
+def score_components(p: "PlayerStats", weights: dict, mode: str, baseline: int = 0) -> dict:
+    """Break a player's score into additive parts (used for scoring and charts)."""
+    stars = p.total_stars * weights["attack"]
+    th = 0.0
+    for rec in p.attacks:
+        if mode == "absolute":
+            th += weights["th_absolute"] * (rec.defender_th - baseline)
+        else:
+            d = rec.diff(mode)
+            if d > 0:
+                th += weights["th_up_bonus"] * d
+            elif d < 0:
+                th -= weights["th_down_penalty"] * (-d)
+    destruction = sum(weights["destruction"] * rec.destruction for rec in p.attacks)
+    penalty = -(weights["defense"] * p.defense_stars + weights["missed_attack_penalty"] * p.missed_attacks)
+    return {"stars": stars, "th": th, "destruction": destruction, "penalty": penalty}
+
+
+def compute_player_score(p: "PlayerStats", weights: dict, mode: str, baseline: int = 0) -> float:
+    c = score_components(p, weights, mode, baseline)
+    return round(c["stars"] + c["th"] + c["destruction"] + c["penalty"], 4)
+
+
 def score_players(players: dict[str, PlayerStats], weights: dict, mode: str = "absolute") -> None:
     baseline = min_defender_th(players) if mode == "absolute" else 0
     for p in players.values():
-        total = 0.0
         p.attacked_up = p.attacked_mirror = p.attacked_down = 0
         for rec in p.attacks:
-            total += rec.stars * weights["attack"]
-            if mode == "absolute":
-                total += weights["th_absolute"] * (rec.defender_th - baseline)
-                d_info = rec.th_diff  # up/mir/dn column stays relative to own TH
-            else:
-                d = rec.diff(mode)
-                if d > 0:
-                    total += weights["th_up_bonus"] * d
-                elif d < 0:
-                    total -= weights["th_down_penalty"] * (-d)
-                d_info = d
+            d_info = rec.th_diff if mode == "absolute" else rec.diff(mode)
             if d_info > 0:
                 p.attacked_up += 1
             elif d_info < 0:
                 p.attacked_down += 1
             else:
                 p.attacked_mirror += 1
-            total += weights["destruction"] * rec.destruction
-        total -= weights["defense"] * p.defense_stars
-        total -= weights["missed_attack_penalty"] * p.missed_attacks
-        p.score = round(total, 4)
+        p.score = compute_player_score(p, weights, mode, baseline)
 
 
 def print_report(players: dict[str, PlayerStats], bonus_slots: int, detail: bool = False,
