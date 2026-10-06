@@ -1,3 +1,6 @@
 [client]
 # Hide the top-right toolbar extras (incl. the GitHub "view source" link) for a clean public look.
 toolbarMode = "minimal"
+
+[theme]
+base = "dark"
