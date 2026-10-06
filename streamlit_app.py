@@ -60,7 +60,7 @@ def inject_style() -> None:
             background-attachment: fixed;
             background-position: center;
         }}
-        .block-container {{ padding-top: 1.5rem; }}
+        .block-container {{ padding-top: 3.5rem; }}
         h1, h2, h3, h4 {{
             font-family: "Trebuchet MS", "Segoe UI", sans-serif;
             color: #ffd977 !important;
@@ -69,8 +69,9 @@ def inject_style() -> None:
         }}
         .coc-title {{
             text-align: center;
-            font-size: 2.3rem;
+            font-size: 2.1rem;
             font-weight: 800;
+            margin-top: 0.4rem;
             background: linear-gradient(90deg, #ffe08a, #f4b63e, #ffcf5c);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
