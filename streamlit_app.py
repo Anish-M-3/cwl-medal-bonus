@@ -210,9 +210,8 @@ with st.sidebar:
         weights["defense"] = st.slider("Defense (per star conceded)", 0.0, 1.0, SCORING["defense"], 0.05)
 
     run = st.button("⚔️ Calculate", type="primary", use_container_width=True)
-    if st.button("🔄 Refresh data (clear cache)", use_container_width=True):
-        fetch_players.clear()
-        st.success("Cache cleared — press Calculate to re-fetch.")
+    st.caption("Calculate always pulls fresh war data. Tweaking weights/mode/gold-pass reuses "
+               "that snapshot instantly (no re-fetch).")
 
 
 _EMOJI_RE = re.compile(
@@ -461,6 +460,7 @@ def render(clan_tag: str) -> None:
 
 
 if run:
+    fetch_players.clear()  # always pull fresh war data when Calculate is pressed
     st.session_state["calculated"] = True
 if st.session_state.get("calculated"):
     render(clan_tag)
