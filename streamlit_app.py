@@ -55,6 +55,14 @@ def get_token() -> str | None:
     return token
 
 
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_players(token: str, base: str, clan_tag: str, include_live: bool, rush_adjust: bool):
+    """Fetch + build players, cached ~10 min. Keyed on the inputs that need API calls,
+    so changing weights/mode/bonus-slots reuses this instead of re-calling the API."""
+    client = CocClient(token, base)
+    return collect_stats(client, clan_tag, include_live=include_live, rush_adjust=rush_adjust)
+
+
 def inject_style() -> None:
     st.markdown(
         f"""
@@ -202,6 +210,9 @@ with st.sidebar:
         weights["defense"] = st.slider("Defense (per star conceded)", 0.0, 1.0, SCORING["defense"], 0.05)
 
     run = st.button("⚔️ Calculate", type="primary", use_container_width=True)
+    if st.button("🔄 Refresh data (clear cache)", use_container_width=True):
+        fetch_players.clear()
+        st.success("Cache cleared — press Calculate to re-fetch.")
 
 
 _EMOJI_RE = re.compile(
@@ -377,12 +388,10 @@ def render(clan_tag: str) -> None:
         return
 
     base = PROXY_BASE if use_proxy else OFFICIAL_BASE
-    client = CocClient(token, base)
 
     with st.spinner("Fetching Clan War League data..."):
         try:
-            players = collect_stats(client, clan_tag, include_live=include_live,
-                                    rush_adjust=rush_adjust)
+            players = fetch_players(token, base, clan_tag, include_live, rush_adjust)
         except SystemExit as exc:
             st.error(str(exc))
             return
