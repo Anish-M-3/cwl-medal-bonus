@@ -98,6 +98,8 @@ def inject_style() -> None:
             color: #241a05; font-weight: 700; border: 0; border-radius: 10px;
         }}
         .stDataFrame {{ border-radius: 12px; overflow: hidden; }}
+        /* Hide the chart hover toolbar ("Show data"/download) so it can't trap the view. */
+        [data-testid="stElementToolbar"] {{ display: none !important; }}
         </style>
         """,
         unsafe_allow_html=True,
