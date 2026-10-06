@@ -59,6 +59,8 @@ class AttackRecord:
     destruction: float
     attacker_th: int
     defender_th: int
+    defender_tag: str = ""      # used to look up rushed-ness
+    defender_dev: float = 1.0   # development factor (1.0 = maxed/unknown; <1 = rushed)
     max_enemy_th: int = 0  # strongest TH available in that war
 
     @property
@@ -114,6 +116,23 @@ def town_hall(member: dict) -> int:
     return int(member.get("townhallLevel") or member.get("townHallLevel") or 0)
 
 
+# A base at/above this hero-completion counts as fully developed (not rushed).
+RUSH_TARGET = 0.85
+
+
+def hero_completion(player_data: dict) -> float:
+    """Fraction 0-1 of home-village hero levels vs their TH-capped max (rushed proxy)."""
+    heroes = [h for h in player_data.get("heroes", []) if h.get("village") == "home"]
+    total = sum(int(h.get("level", 0)) for h in heroes)
+    cap = sum(int(h.get("maxLevel", 0)) for h in heroes)
+    return (total / cap) if cap else 1.0
+
+
+def dev_factor(completion: float) -> float:
+    """Scale hero completion into a 0-1 strength factor (>=RUSH_TARGET -> full value)."""
+    return max(0.0, min(1.0, completion / RUSH_TARGET)) if RUSH_TARGET else completion
+
+
 class CocClient:
     def __init__(self, token: str, base: str):
         self.base = base
@@ -139,8 +158,28 @@ class CocClient:
     def war(self, war_tag: str) -> dict:
         return self._get(f"/clanwarleagues/wars/{encode_tag(war_tag)}")
 
+    def player(self, player_tag: str) -> dict:
+        return self._get(f"/players/{encode_tag(player_tag)}")
 
-def collect_stats(client: CocClient, clan_tag: str, include_live: bool = False) -> dict[str, PlayerStats]:
+
+def apply_rush_adjustment(client: CocClient, players: dict[str, "PlayerStats"]) -> None:
+    """Set each attack's defender_dev from the defender's hero completion (cached per tag)."""
+    cache: dict[str, float] = {}
+    for p in players.values():
+        for rec in p.attacks:
+            tag = rec.defender_tag
+            if not tag:
+                continue
+            if tag not in cache:
+                try:
+                    cache[tag] = dev_factor(hero_completion(client.player(tag)))
+                except Exception:
+                    cache[tag] = 1.0  # on any error, don't penalise
+            rec.defender_dev = cache[tag]
+
+
+def collect_stats(client: CocClient, clan_tag: str, include_live: bool = False,
+                  rush_adjust: bool = False) -> dict[str, PlayerStats]:
     clan_tag = normalise_tag(clan_tag)
     group = client.league_group(clan_tag)
 
@@ -193,6 +232,7 @@ def collect_stats(client: CocClient, clan_tag: str, include_live: bool = False) 
                         destruction=float(atk.get("destructionPercentage", 0)),
                         attacker_th=town_hall(m),
                         defender_th=opp_th.get(atk.get("defenderTag"), town_hall(m)),
+                        defender_tag=atk.get("defenderTag", ""),
                         max_enemy_th=max_enemy_th,
                     )
                     p.attacks.append(rec)
@@ -204,6 +244,8 @@ def collect_stats(client: CocClient, clan_tag: str, include_live: bool = False) 
             best = m.get("bestOpponentAttack") or {}
             p.defense_stars += int(best.get("stars", 0))
 
+    if rush_adjust:
+        apply_rush_adjustment(client, players)
     return players
 
 
@@ -212,12 +254,14 @@ def score_components(p: "PlayerStats", weights: dict, mode: str, baseline: int =
     stars = p.total_stars * weights["attack"]
     th = 0.0
     for rec in p.attacks:
+        # defender_dev is 1.0 unless rush adjustment ran; it scales down the reward
+        # for clearing a rushed (under-developed) base.
         if mode == "absolute":
-            th += weights["th_absolute"] * (rec.defender_th - baseline)
+            th += weights["th_absolute"] * (rec.defender_th - baseline) * rec.defender_dev
         else:
             d = rec.diff(mode)
             if d > 0:
-                th += weights["th_up_bonus"] * d
+                th += weights["th_up_bonus"] * d * rec.defender_dev
             elif d < 0:
                 th -= weights["th_down_penalty"] * (-d)
     destruction = sum(weights["destruction"] * rec.destruction for rec in p.attacks)
@@ -327,6 +371,9 @@ def parse_args() -> argparse.Namespace:
                          "available that war; 'raw' = plain attacker-vs-defender TH difference.")
     ap.add_argument("--include-live", action="store_true",
                     help="Also count the in-progress war's attacks (no missed penalty for it).")
+    ap.add_argument("--rush-adjust", action="store_true",
+                    help="Scale a base's TH value by the defender's hero development "
+                         "(a rushed high-TH base is worth less). Slower: one API call per defender.")
     ap.add_argument("--token", default=os.environ.get("COC_API_TOKEN"), help="API token (or set COC_API_TOKEN).")
     for key in SCORING:
         ap.add_argument(f"--{key.replace('_', '-')}", type=float, default=SCORING[key],
@@ -365,7 +412,8 @@ def main() -> None:
     base = PROXY_BASE if args.proxy else OFFICIAL_BASE
     client = CocClient(args.token, base)
 
-    players = collect_stats(client, args.clan_tag, include_live=args.include_live)
+    players = collect_stats(client, args.clan_tag, include_live=args.include_live,
+                            rush_adjust=args.rush_adjust)
     score_players(players, weights, mode=args.th_mode)
     print_report(players, args.bonus_slots, detail=args.detail, mode=args.th_mode)
 

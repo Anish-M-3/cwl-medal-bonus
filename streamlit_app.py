@@ -166,6 +166,9 @@ with st.sidebar:
     )
     include_live = st.checkbox("Include in-progress war", value=False,
                                help="Count the live war's done attacks (no missed penalty).")
+    rush_adjust = st.checkbox("Adjust for rushed bases", value=False,
+                              help="Scale a base's TH value by the defender's hero development, so a "
+                                   "rushed high-TH base is worth less. Slower: one API call per defender.")
     use_proxy = st.checkbox("Use RoyaleAPI proxy", value=True,
                             help="Required if your API key is allow-listed to the proxy IP.")
 
@@ -344,8 +347,9 @@ def detail_view(ranked, players, mode):
                 else:
                     d = rec.diff(mode)
                     note = ("UP " if d > 0 else ("DOWN " if d < 0 else "MIRROR ")) + (f"{d:+d}" if d else "")
+                rushed = f"  ·  🏚️ rushed ({rec.defender_dev*100:.0f}% dev)" if rec.defender_dev < 0.999 else ""
                 st.write(f"TH{rec.attacker_th} → TH{rec.defender_th} · {rec.stars}★ · "
-                         f"{rec.destruction:.0f}%  ({note})")
+                         f"{rec.destruction:.0f}%  ({note}){rushed}")
             if p.missed_attacks:
                 st.write(f"❌ Missed ×{p.missed_attacks}")
 
@@ -361,7 +365,8 @@ def render(clan_tag: str) -> None:
 
     with st.spinner("Fetching Clan War League data..."):
         try:
-            players = collect_stats(client, clan_tag, include_live=include_live)
+            players = collect_stats(client, clan_tag, include_live=include_live,
+                                    rush_adjust=rush_adjust)
         except SystemExit as exc:
             st.error(str(exc))
             return

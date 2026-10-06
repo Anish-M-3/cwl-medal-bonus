@@ -43,6 +43,15 @@ Only **finished** wars (`state == warEnded`) are scored by default, so attacks t
 aren't due yet are never counted as "missed". Add `--include-live` to also count the
 in-progress war's completed attacks (without a missed penalty for it).
 
+### Rushed-base adjustment (`--rush-adjust`)
+
+A rushed TH18 (under-levelled heroes) is weaker than a maxed one, so clearing it
+shouldn't score like a real TH18. With `--rush-adjust`, each defender's **hero
+completion** (`/players/{tag}`) scales down the TH value of that base — a rushed base is
+worth proportionally less. Defensive buildings aren't in the API, so heroes are used as
+the strength proxy. This makes one API call per unique defender, so it's slower; it's off
+by default (a checkbox in the web app).
+
 ## 1. Get a Clash of Clans API token (free)
 
 1. Go to **https://developer.clashofclans.com/** and log in with your Supercell ID.
