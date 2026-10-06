@@ -228,7 +228,7 @@ def clean_name(s: str) -> str:
     return out or s
 
 
-def make_results_png(ranked, bonus_slots, clan_tag, mode) -> bytes:
+def make_results_png(ranked, bonus_slots, clan_tag, mode, winner=None, has_pass=frozenset()) -> bytes:
     n = len(ranked)
     fig_h = 1.6 + 0.42 * n
     fig = plt.figure(figsize=(8.4, fig_h), dpi=200)
@@ -240,14 +240,14 @@ def make_results_png(ranked, bonus_slots, clan_tag, mode) -> bytes:
 
     ax.text(0.5, 0.965, "CWL MEDAL-BONUS", color="#ffcf5c", fontsize=22,
             fontweight="bold", ha="center", va="center")
-    w = ranked[0]
+    w = winner or ranked[0]
     ax.text(0.5, 0.925,
             f"Gold Pass Winner:  {clean_name(w.name)}    |    {clan_tag}    |    {mode} mode",
             color="#e9d9a6", fontsize=11, ha="center", va="center")
 
     top, bottom = 0.88, 0.03
     row_h = (top - bottom) / (n + 1)
-    xr = {"rank": 0.055, "bonus": 0.105, "name": 0.145, "th": 0.66, "score": 0.80, "stars": 0.93}
+    xr = {"rank": 0.05, "bonus": 0.095, "name": 0.13, "th": 0.60, "score": 0.73, "stars": 0.84, "pass": 0.975}
 
     yh = top - row_h / 2
     ax.text(xr["rank"], yh, "#", color="#9fb3a6", fontsize=10, ha="center", va="center", fontweight="bold")
@@ -255,20 +255,26 @@ def make_results_png(ranked, bonus_slots, clan_tag, mode) -> bytes:
     ax.text(xr["th"], yh, "TH", color="#9fb3a6", fontsize=10, ha="center", va="center", fontweight="bold")
     ax.text(xr["score"], yh, "SCORE", color="#9fb3a6", fontsize=10, ha="right", va="center", fontweight="bold")
     ax.text(xr["stars"], yh, "STARS", color="#9fb3a6", fontsize=10, ha="right", va="center", fontweight="bold")
+    ax.text(xr["pass"], yh, "PASS", color="#9fb3a6", fontsize=10, ha="right", va="center", fontweight="bold")
 
     for i, p in enumerate(ranked, 1):
         y = top - row_h * i - row_h / 2
-        if i == 1:
+        is_winner = winner is not None and p.tag == winner.tag
+        if is_winner:
             ax.add_patch(patches.Rectangle((0.02, y - row_h / 2), 0.96, row_h, color="#3a2f0b", zorder=0))
         ax.text(xr["rank"], y, str(i), color="#dfe9e0", fontsize=10, ha="center", va="center")
         if i <= bonus_slots:
             ax.text(xr["bonus"], y, "★", color="#f4b63e", fontsize=11, ha="center", va="center")
-        ax.text(xr["name"], y, clean_name(p.name)[:24], fontsize=10.5, ha="left", va="center",
-                color="#ffe08a" if i == 1 else "#eef5ee")
+        ax.text(xr["name"], y, clean_name(p.name)[:22], fontsize=10.5, ha="left", va="center",
+                color="#ffe08a" if is_winner else "#eef5ee")
         ax.text(xr["th"], y, str(p.th), color="#cfe3c9", fontsize=10, ha="center", va="center")
         ax.text(xr["score"], y, f"{p.score:.2f}", color="#ffd977", fontsize=10.5, ha="right",
                 va="center", fontweight="bold")
         ax.text(xr["stars"], y, str(p.total_stars), color="#cfe3c9", fontsize=10, ha="right", va="center")
+        if is_winner:
+            ax.text(xr["pass"], y, "WINNER", color="#ffd977", fontsize=8.5, ha="right", va="center", fontweight="bold")
+        elif p.tag in has_pass:
+            ax.text(xr["pass"], y, "has pass", color="#c7a95a", fontsize=8.5, ha="right", va="center")
 
     buf = io.BytesIO()
     fig.savefig(buf, format="png", facecolor=fig.get_facecolor(), bbox_inches="tight", pad_inches=0.2)
@@ -276,7 +282,7 @@ def make_results_png(ranked, bonus_slots, clan_tag, mode) -> bytes:
     return buf.getvalue()
 
 
-def ranking_table(ranked, bonus_slots):
+def ranking_table(ranked, bonus_slots, has_pass=frozenset(), winner_tag=None):
     rows = []
     for i, p in enumerate(ranked, 1):
         rows.append({
@@ -289,6 +295,8 @@ def ranking_table(ranked, bonus_slots):
             "Att": p.attacks_made,
             "Miss": p.missed_attacks,
             "Up/Mir/Dn": f"{p.attacked_up}/{p.attacked_mirror}/{p.attacked_down}",
+            "Gold Pass": ("🏆 winner" if p.tag == winner_tag
+                          else ("🏅 active" if p.tag in has_pass else "")),
         })
     st.dataframe(rows, use_container_width=True, hide_index=True)
 
@@ -405,7 +413,18 @@ def render(clan_tag: str) -> None:
         st.warning("No players found.")
         return
 
-    winner = ranked[0]
+    # The game API can't tell who owns a Gold Pass, so the leader marks it here.
+    exclude_pass = st.checkbox("🏅 Exclude members who already have a Gold Pass", value=False,
+                               help="The CoC API doesn't expose Gold Pass ownership — pick who already "
+                                    "has one, and they won't be chosen as the Gold Pass winner.")
+    has_pass: set[str] = set()
+    if exclude_pass:
+        labels = {f"{p.name}  ({p.tag})": p.tag for p in ranked}
+        chosen = st.multiselect("Members who already have a Gold Pass", options=list(labels))
+        has_pass = {labels[c] for c in chosen}
+
+    eligible = [p for p in ranked if p.tag not in has_pass]
+    winner = eligible[0] if eligible else ranked[0]
     st.markdown(
         f'<div class="winner-card">🏆 <span class="name">{winner.name}</span><br>'
         f'<span class="meta">Gold Pass winner · {winner.tag} · score {winner.score:.2f}</span></div>',
@@ -417,8 +436,8 @@ def render(clan_tag: str) -> None:
     )
 
     with tab_rank:
-        ranking_table(ranked, bonus_slots)
-        png = make_results_png(ranked, bonus_slots, clan_tag, th_mode)
+        ranking_table(ranked, bonus_slots, has_pass, winner.tag)
+        png = make_results_png(ranked, bonus_slots, clan_tag, th_mode, winner, has_pass)
         st.download_button("⬇️ Download ranking as PNG", data=png,
                            file_name=f"cwl-ranking-{th_mode}.png", mime="image/png",
                            use_container_width=True)
@@ -442,6 +461,8 @@ def render(clan_tag: str) -> None:
 
 
 if run:
+    st.session_state["calculated"] = True
+if st.session_state.get("calculated"):
     render(clan_tag)
 else:
     st.info("Set your options in the sidebar and press **⚔️ Calculate**. "
