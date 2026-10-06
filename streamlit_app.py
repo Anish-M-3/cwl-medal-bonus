@@ -112,6 +112,38 @@ st.markdown('<div class="coc-sub">Clan War League rankings with Town-Hall-aware 
             unsafe_allow_html=True)
 st.write("")
 
+with st.expander("ℹ️ Which scoring mode should I pick?", expanded=False):
+    st.markdown(
+        """
+**All three modes score attack stars, destruction and missed attacks the same.**
+They differ only in **how the Town Hall you attacked affects your score.**
+
+| Mode | What it rewards | Mirror (same-TH) hit | Best for |
+|---|---|---|---|
+| **🟡 Absolute** | How **strong the base you hit** is — clearing a TH17 is worth more than a TH12, for everyone | Gets a **plus** (strong base = points) | Rewarding the players who cleared the **toughest bases** |
+| **🟢 Fair** | Hitting the **strongest target available** that war; skipping to an easier one is penalised | **Neutral** (full credit, no bonus) | Clans that **hit their mirror** by discipline |
+| **🟤 Raw** | **Punching up** — attacking a **higher** TH than your own | **0** (can't go up = no bonus) | Rewarding **underdogs** who hit above their TH |
+
+---
+
+### 👉 Pick by how your clan plays
+
+- **🎲 Everyone attacks randomly / free-for-all** → **Absolute**
+  No set strategy, so just reward whoever actually cleared the **strongest bases**.
+
+- **🧭 Leader assigns bases by player experience & TH** → **Absolute**
+  You placed your best players on the hardest bases, so "cleared a strong base = top of the list" matches your plan. Top-TH players also get credit for their mirror hits.
+
+- **🎯 Everyone hits their own mirror (disciplined)** → **Fair**
+  Hitting your mirror = full neutral credit; dropping to an easier base is penalised; your maxed players aren't punished for having no base to go "up" to.
+
+- **🐤 You want to reward low-TH players who punch up** → **Raw**
+  Only this mode gives a bonus for attacking a **higher** TH than your own.
+
+*Tip: the **⚖️ Mode comparison** tab shows all three side-by-side so you can see how the order changes.*
+        """
+    )
+
 with st.sidebar:
     st.header("⚙️ Settings")
     clan_tag = st.text_input("Clan tag", value="#2GYLQ9LLP")
