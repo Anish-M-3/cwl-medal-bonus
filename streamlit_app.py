@@ -14,6 +14,7 @@ from __future__ import annotations
 import io
 import os
 import re
+from datetime import datetime, timezone
 
 import altair as alt
 import matplotlib
@@ -57,10 +58,11 @@ def get_token() -> str | None:
 
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_players(token: str, base: str, clan_tag: str, include_live: bool, rush_adjust: bool):
-    """Fetch + build players, cached ~10 min. Keyed on the inputs that need API calls,
-    so changing weights/mode/bonus-slots reuses this instead of re-calling the API."""
+    """Fetch + build players, cached ~10 min. Returns (players, fetched_at) where fetched_at
+    is frozen at fetch time, so it reflects the real API call even across cache-hit reruns."""
     client = CocClient(token, base)
-    return collect_stats(client, clan_tag, include_live=include_live, rush_adjust=rush_adjust)
+    players = collect_stats(client, clan_tag, include_live=include_live, rush_adjust=rush_adjust)
+    return players, datetime.now(timezone.utc)
 
 
 def inject_style() -> None:
@@ -398,13 +400,18 @@ def render(clan_tag: str) -> None:
 
     with st.spinner("Fetching Clan War League data..."):
         try:
-            players = fetch_players(token, base, clan_tag, include_live, rush_adjust)
+            players, fetched_at = fetch_players(token, base, clan_tag, include_live, rush_adjust)
         except SystemExit as exc:
             st.error(str(exc))
             return
         except Exception as exc:  # network / API errors
             st.error(f"Failed to fetch data: {exc}")
             return
+
+    age_min = (datetime.now(timezone.utc) - fetched_at).total_seconds() / 60
+    age = "just now" if age_min < 1 else f"{int(age_min)} min ago"
+    st.caption(f"🕒 Live data fetched: {fetched_at:%Y-%m-%d %H:%M:%S} UTC  ·  {age}  "
+               "— press **⚔️ Calculate** to refresh.")
 
     score_players(players, weights, mode=th_mode)
     ranked = sorted(players.values(), key=lambda p: p.score, reverse=True)
