@@ -117,6 +117,20 @@ def inject_style() -> None:
         .stDataFrame {{ border-radius: 12px; overflow: hidden; }}
         /* Hide the chart hover toolbar ("Show data"/download) so it can't trap the view. */
         [data-testid="stElementToolbar"] {{ display: none !important; }}
+        /* Hide the GitHub 'view source' link / toolbar actions for a clean public look. */
+        [data-testid="stToolbarActions"] {{ display: none !important; }}
+        [data-testid="stToolbar"] a[href*="github"],
+        header a[href*="github.com"] {{ display: none !important; }}
+        /* Professional developer badge, fixed to the corner. */
+        .dev-badge {{
+            position: fixed; left: 14px; bottom: 12px; z-index: 1000;
+            font-size: 0.78rem; letter-spacing: 0.3px;
+            color: #e9d9a6; background: rgba(20,30,22,0.78);
+            padding: 5px 12px; border-radius: 12px;
+            border: 1px solid rgba(244,182,62,0.35);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.45);
+            font-family: "Trebuchet MS","Segoe UI",sans-serif;
+        }}
         </style>
         """,
         unsafe_allow_html=True,
@@ -129,6 +143,7 @@ inject_style()
 st.markdown('<div class="coc-title">🏅 CWL MEDAL-BONUS CALCULATOR ⚔️</div>', unsafe_allow_html=True)
 st.markdown('<div class="coc-sub">Clan War League rankings with Town-Hall-aware scoring · unofficial fan tool</div>',
             unsafe_allow_html=True)
+st.markdown('<div class="dev-badge">⚔️ Developed by <b>Anish M</b></div>', unsafe_allow_html=True)
 st.write("")
 
 with st.expander("ℹ️ Which scoring mode should I pick?", expanded=False):
