@@ -150,6 +150,22 @@ They differ only in **how the Town Hall you attacked affects your score.**
   Only this mode gives a bonus for attacking a **higher** TH than your own.
 
 *Tip: the **⚖️ Mode comparison** tab shows all three side-by-side so you can see how the order changes.*
+
+---
+
+### 🏚️ "Adjust for rushed bases" (optional toggle)
+
+A **rushed** base (e.g. a TH18 with TH16-level heroes) is weaker than a maxed one, so
+clearing it shouldn't score like a real TH18. Turn this on and each base's TH value is
+**scaled down by the defender's hero development** (from the game's player API) — a rushed
+base is worth proportionally less.
+
+- **Works in all modes**, but **matters most in Absolute**, where every hit is rewarded by
+  base strength. In **Fair/Raw** it only tempers the *punching-up* bonus (mirror/down hits
+  earn no TH bonus, so there's nothing to scale).
+- Note: only **heroes/troops** are in the API — **defensive buildings are not** — so hero
+  development is used as the rushed proxy.
+- It makes one extra API call per defender, so it's **a bit slower**. Off by default.
         """
     )
 
